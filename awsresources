@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# Check if a profile name is provided
+if [ -z "$1" ]; then
+  echo "Usage: $0 <profile-name>"
+  exit 1
+fi
+
+PROFILE_NAME=$1
+
+echo "Checking AWS resources for profile: $PROFILE_NAME"
+echo "-----------------------------------------------"
+
+# List EC2 instances
+echo "EC2 Instances:"
+aws ec2 describe-instances --profile $PROFILE_NAME --query 'Reservations[*].Instances[*].[InstanceId,InstanceType,State.Name,PublicIpAddress]' --output table
+echo "-----------------------------------------------"
+
+# List S3 buckets
+echo "S3 Buckets:"
+aws s3 ls --profile $PROFILE_NAME
+echo "-----------------------------------------------"
+
+# List RDS instances
+echo "RDS Instances:"
+aws rds describe-db-instances --profile $PROFILE_NAME --query 'DBInstances[*].[DBInstanceIdentifier,DBInstanceClass,Engine,DBInstanceStatus]' --output table
+echo "-----------------------------------------------"
+
+# List Lambda functions
+echo "Lambda Functions:"
+aws lambda list-functions --profile $PROFILE_NAME --query 'Functions[*].[FunctionName,Runtime,LastModified]' --output table
+echo "-----------------------------------------------"
+
+# List ECS clusters
+echo "ECS Clusters:"
+aws ecs list-clusters --profile $PROFILE_NAME --query 'clusterArns' --output table
+echo "-----------------------------------------------"
+
+# List EKS clusters
+echo "EKS Clusters:"
+aws eks list-clusters --profile $PROFILE_NAME --query 'clusters' --output table
+echo "-----------------------------------------------"
+
+# List CloudFormation stacks
+echo "CloudFormation Stacks:"
+aws cloudformation list-stacks --profile $PROFILE_NAME --query 'StackSummaries[*].[StackName,StackStatus,CreationTime]' --output table
+echo "-----------------------------------------------"
+
+# List IAM roles
+echo "IAM Roles:"
+aws iam list-roles --profile $PROFILE_NAME --query 'Roles[*].[RoleName,Arn]' --output table
+echo "-----------------------------------------------"
+
+# List DynamoDB tables
+echo "DynamoDB Tables:"
+aws dynamodb list-tables --profile $PROFILE_NAME --query 'TableNames' --output table
+echo "-----------------------------------------------"
+
+# List SQS queues
+echo "SQS Queues:"
+aws sqs list-queues --profile $PROFILE_NAME --query 'QueueUrls' --output table
+echo "-----------------------------------------------"
+
+# List SNS topics
+echo "SNS Topics:"
+aws sns list-topics --profile $PROFILE_NAME --query 'Topics[*].[TopicArn]' --output table
+echo "-----------------------------------------------"
+
+echo "Resource check complete."
+
+exit 0
+

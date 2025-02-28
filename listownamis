@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# Check if a profile name is provided
+if [ -z "$1" ]; then
+  echo "Usage: $0 <profile-name>"
+  exit 1
+fi
+
+PROFILE_NAME=$1
+
+# Check if the AWS CLI is configured
+if ! aws sts get-caller-identity --profile $PROFILE_NAME > /dev/null 2>&1; then
+  echo "AWS CLI is not configured properly for profile: $PROFILE_NAME. Please configure it before running this script."
+  exit 1
+fi
+
+# List all own AMIs
+echo "Listing all AMIs owned by the account for profile: $PROFILE_NAME"
+echo "------------------------------------------------------------"
+
+# Retrieve and display AMI information
+aws ec2 describe-images --owners self --profile $PROFILE_NAME --query 'Images[*].[ImageId,Name,CreationDate,State]' --output table
+
+echo "------------------------------------------------------------"
+echo "AMI information retrieval complete."
+
+exit 0
+

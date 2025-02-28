@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# Check if an AMI ID and profile name are provided
+if [ -z "$1" ] || [ -z "$2" ]; then
+  echo "Usage: $0 <ami-id> <profile-name>"
+  exit 1
+fi
+
+AMI_ID=$1
+PROFILE_NAME=$2
+
+# Check if the AWS CLI is configured
+if ! aws sts get-caller-identity --profile $PROFILE_NAME > /dev/null 2>&1; then
+  echo "AWS CLI is not configured properly for profile: $PROFILE_NAME. Please configure it before running this script."
+  exit 1
+fi
+
+# Get information about the specified AMI
+echo "Getting information about AMI: $AMI_ID"
+echo "-----------------------------------------"
+
+aws ec2 describe-images --image-ids $AMI_ID --profile $PROFILE_NAME --output table
+
+echo "-----------------------------------------"
+echo "AMI information retrieval complete."
+
+exit 0
+
