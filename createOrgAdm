@@ -1,0 +1,83 @@
+#!/bin/bash
+
+# List available AWS CLI profiles
+echo "Available AWS CLI Profiles:"
+aws configure list-profiles
+
+# Prompt for AWS CLI Profile, Region, and OrgAdm Email
+read -p "Enter the AWS CLI Profile to use: " AWS_PROFILE
+read -p "Enter the OrgAdm User Email: " ORGADM_EMAIL
+read -p "Enter the AWS Region: " AWS_REGION
+
+# Perform AWS SSO Login
+echo "Logging in to AWS SSO..."
+aws sso login --profile "$AWS_PROFILE"
+
+# Set AWS CLI Profile and Region
+export AWS_PROFILE
+export AWS_REGION
+
+# AWS SSO Instance ARN
+SSO_INSTANCE_ARN=$(aws sso-admin list-instances --query "Instances[0].InstanceArn" --output text --region "$AWS_REGION" --profile "$AWS_PROFILE")
+
+# Management Account ID
+MANAGEMENT_ACCOUNT_ID=$(aws organizations describe-organization --query "Organization.MasterAccountId" --output text --region "$AWS_REGION" --profile "$AWS_PROFILE")
+
+echo "Creating OrganizationAdministration permission set..."
+
+# Create the Permission Set
+PERMISSION_SET_ARN=$(aws sso-admin create-permission-set \
+    --instance-arn "$SSO_INSTANCE_ARN" \
+    --name "OrganizationAdministration" \
+    --description "Permission set for Organization Administration" \
+    --session-duration "PT4H" \
+    --query "PermissionSet.PermissionSetArn" --output text --region "$AWS_REGION" --profile "$AWS_PROFILE")
+
+# Attach AWS Managed Policies
+echo "Attaching managed policies..."
+
+aws sso-admin attach-managed-policy-to-permission-set \
+    --instance-arn "$SSO_INSTANCE_ARN" \
+    --permission-set-arn "$PERMISSION_SET_ARN" \
+    --managed-policy-arn "arn:aws:iam::aws:policy/AdministratorAccess" --region "$AWS_REGION" --profile "$AWS_PROFILE"
+
+aws sso-admin attach-managed-policy-to-permission-set \
+    --instance-arn "$SSO_INSTANCE_ARN" \
+    --permission-set-arn "$PERMISSION_SET_ARN" \
+    --managed-policy-arn "arn:aws:iam::aws:policy/AWSOrganizationsFullAccess" --region "$AWS_REGION" --profile "$AWS_PROFILE"
+
+aws sso-admin attach-managed-policy-to-permission-set \
+    --instance-arn "$SSO_INSTANCE_ARN" \
+    --permission-set-arn "$PERMISSION_SET_ARN" \
+    --managed-policy-arn "arn:aws:iam::aws:policy/IAMFullAccess" --region "$AWS_REGION" --profile "$AWS_PROFILE"
+
+# Provision the Permission Set
+aws sso-admin provision-permission-set \
+    --instance-arn "$SSO_INSTANCE_ARN" \
+    --permission-set-arn "$PERMISSION_SET_ARN" --region "$AWS_REGION" --profile "$AWS_PROFILE"
+
+# Retrieve Identity Store ID
+IDENTITY_STORE_ID=$(aws sso-admin list-instances --query "Instances[0].IdentityStoreId" --output text --region "$AWS_REGION" --profile "$AWS_PROFILE")
+
+# Create the OrgAdm User
+echo "Creating OrgAdm user..."
+ORGADM_USER_ID=$(aws identitystore create-user \
+    --identity-store-id "$IDENTITY_STORE_ID" \
+    --user-name "OrgAdm" \
+    --display-name "Organization Administrator" \
+    --emails "[{\"Value\":\"$ORGADM_EMAIL\",\"Type\":\"work\"}]" \
+    --query "UserId" --output text --region "$AWS_REGION" --profile "$AWS_PROFILE")
+
+# Assign the OrgAdm user to the Management Account with the OrganizationAdministration Permission Set
+echo "Assigning OrgAdm user to Management Account..."
+
+aws sso-admin create-account-assignment \
+    --instance-arn "$SSO_INSTANCE_ARN" \
+    --target-id "$MANAGEMENT_ACCOUNT_ID" \
+    --target-type "AWS_ACCOUNT" \
+    --permission-set-arn "$PERMISSION_SET_ARN" \
+    --principal-type "USER" \
+    --principal-id "$ORGADM_USER_ID" --region "$AWS_REGION" --profile "$AWS_PROFILE"
+
+echo "OrgAdm user and OrganizationAdministration permission set successfully created and assigned in region $AWS_REGION using profile $AWS_PROFILE!"
+

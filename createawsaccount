@@ -1,0 +1,57 @@
+#!/bin/bash
+
+set -e
+
+ORG_ROLE="OrganizationAccountAccessRole"  # Role for accessing new accounts
+MANAGEMENT_PROFILE="Foreman"  # AWS CLI profile for the Management Account
+
+create_account() {
+    local project=$1
+    local env=$2
+    local email=$3
+    local account_name="${project}-${env}"
+    
+    echo "Creating AWS account: $account_name..."
+    
+    ACCOUNT_ID=$(aws organizations create-account \
+        --email "$email" \
+        --account-name "$account_name" \
+        --role-name "$ORG_ROLE" \
+        --query 'CreateAccountStatus.Id' \
+        --output text \
+        --profile "$MANAGEMENT_PROFILE")
+    
+    echo "Waiting for account creation to complete..."
+    while true; do
+        STATUS=$(aws organizations describe-create-account-status \
+            --create-account-request-id "$ACCOUNT_ID" \
+            --query 'CreateAccountStatus.State' \
+            --output text \
+            --profile "$MANAGEMENT_PROFILE")
+        
+        if [[ "$STATUS" == "SUCCEEDED" ]]; then
+            NEW_ACCOUNT_ID=$(aws organizations describe-create-account-status \
+                --create-account-request-id "$ACCOUNT_ID" \
+                --query 'CreateAccountStatus.AccountId' \
+                --output text \
+                --profile "$MANAGEMENT_PROFILE")
+            echo "Account created successfully: $NEW_ACCOUNT_ID"
+            break
+        elif [[ "$STATUS" == "FAILED" ]]; then
+            echo "Account creation failed. Exiting."
+            exit 1
+        fi
+        echo "Waiting... (Current status: $STATUS)"
+        sleep 10
+    done
+    
+    echo "$env account for $project created: $NEW_ACCOUNT_ID"
+    echo "$NEW_ACCOUNT_ID" > "${account_name}_id.txt"
+}
+
+# Example usage
+PROJECT_NAME="FinTechProject"
+create_account "$PROJECT_NAME" "dev" "dev@example.com"
+create_account "$PROJECT_NAME" "uat" "uat@example.com"
+create_account "$PROJECT_NAME" "prod" "prod@example.com"
+

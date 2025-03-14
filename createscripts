@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Check if a repository name is provided
+if [ -z "$1" ]; then
+  echo "Usage: $0 <repository-name>"
+  exit 1
+fi
+
+REPO_NAME=$1
+USERNAME="jcgarcia"
+EMAIL="jcgarcia@ingasti.com"
+
+# Set up Git
+git config --global user.name "$USERNAME"
+git config --global user.email "$EMAIL"
+
+# Navigate to your scripts directory
+cd ~/scripts
+
+# Initialize a Git repository
+git init
+
+# Add your scripts to the repository
+git add .
+
+# Commit your changes
+git commit -m "Initial commit of scripts"
+
+# Add the remote repository
+git remote add origin https://github.com/$USERNAME/$REPO_NAME.git
+
+# Push your changes to GitHub
+git push -u origin master
+
+echo "Scripts pushed to GitHub repository: $REPO_NAME"
+

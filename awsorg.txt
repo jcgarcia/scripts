@@ -1,0 +1,143 @@
+#!/bin/bash
+
+# ------------------------------------------------------------------------------
+# Script Name:    example_script.sh
+# Description:    This script demonstrates adding comments and how it works.
+# Usage:          ./example_script.sh [options]
+# Options:        -h | --help    Show this help message
+#                 -v | --version Show script version
+#                 -a | --optionA Description of option A
+#                 -b | --optionB Description of option B
+# Author:         Your Name
+# Date:           2025-02-28
+# Version:        1.1
+# ------------------------------------------------------------------------------
+
+# Display usage information
+show_help() {
+  echo "Usage: ./example_script.sh [options]"
+  echo "Options:"
+  echo "  -h | --help    Show this help message"
+  echo "  -v | --version Show script version"
+  echo "  -a | --optionA Description of option A"
+  echo "  -b | --optionB Description of option B"
+}
+
+# Display script version
+show_version() {
+  echo "example_script.sh version 1.1"
+}
+
+# Enhanced error handling function
+handle_error() {
+  local exit_code=$1
+  local message=$2
+  echo "Error: $message (Exit Code: $exit_code)"
+  exit $exit_code
+}
+
+# Cleanup function to handle temporary files or resources
+cleanup() {
+  echo "Cleaning up temporary files..."
+  # Example: rm -f temp_file
+}
+trap cleanup EXIT
+
+# Main script logic
+main() {
+  # Check if no arguments were provided
+  if [ $# -eq 0 ]; then
+    echo "No options were provided. Use -h or --help for usage information."
+    exit 1
+  fi
+
+  # Parse command-line options
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)
+        show_help
+        exit 0
+        ;;
+      -v|--version)
+        show_version
+        exit 0
+        ;;
+      -f|--format)
+	    get_organization($2)
+        echo "Option A selected with value: $OPTION_A"
+        shift 2
+        ;;
+      -b|--optionB)
+        OPTION_B="$2"
+        echo "Option B selected with value: $OPTION_B"
+        shift 2
+        ;;
+      -i|--info)
+        get_organization
+		shift 2
+        exit 0
+        ;;
+      *)
+        echo "Unknown option: $1"
+        show_help
+        exit 1
+        ;;
+    esac
+  done
+}
+
+# Insert your code below.
+
+## begin of code
+get_organization() {
+  echo "Fetching AWS Organization information..."
+
+  # Check if AWS CLI is installed
+  if ! command -v aws &> /dev/null; then
+    handle_error 1 "AWS CLI is not installed. Please install it first."
+  fi
+
+  # Check if AWS CLI is configured
+  if ! aws sts get-caller-identity &> /dev/null; then
+    handle_error 1 "AWS CLI is not configured. Please configure it using 'aws configure'."
+  fi
+
+  # Get organization details
+  echo "Fetching organization details..."
+  organization_info=$(aws organizations describe-organization 2> /dev/null)
+  if [ $? -ne 0 ]; then
+    handle_error 1 "Failed to fetch organization details. Please check your permissions."
+  fi
+  echo "Organization Details:"
+  echo "$organization_info"
+
+  # List accounts in the organization
+  echo "Fetching list of accounts..."
+  accounts=$(aws organizations list-accounts 2> /dev/null)
+  if [ $? -ne 0 ]; then
+    handle_error 1 "Failed to list accounts. Please check your permissions."
+  fi
+  echo "Accounts:"
+  echo "$accounts"
+
+  # Fetch the root ID
+  echo "Fetching root ID..."
+  root_id=$(aws organizations list-roots --query "Roots[0].Id" --output text 2> /dev/null)
+  if [ $? -ne 0 ]; then
+    handle_error 1 "Failed to fetch root ID. Please check your permissions."
+  fi
+
+  # List organizational units
+  echo "Fetching organizational units..."
+  ous=$(aws organizations list-organizational-units-for-parent --parent-id "$root_id" 2> /dev/null)
+  if [ $? -ne 0 ]; then
+    handle_error 1 "Failed to fetch organizational units. Please check your permissions."
+  fi
+  echo "Organizational Units:"
+  echo "$ous"
+}
+## end of code
+
+# Execute the main function
+main "$@"
+

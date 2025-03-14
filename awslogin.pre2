@@ -1,0 +1,79 @@
+#!/bin/bash
+
+# ------------------------------------------------------------------------------
+# Script Name:    aws_sso_login.sh
+# Description:    Automates AWS SSO login and account selection for profiles with sso-session.
+# Usage:          ./aws_sso_login.sh
+# Author:         Your Name
+# Date:           2025-03-12
+# Version:        1.9
+# ------------------------------------------------------------------------------
+
+AWS_PROFILE=""
+
+# Function to display available AWS profiles with sso-session
+list_profiles() {
+  echo "Available AWS profiles with sso-session:"
+
+  # Read and parse the ~/.aws/config file manually
+  profiles=()
+  while IFS= read -r line; do
+    # Check if the line starts with "[profile "
+    if [[ "$line" == "[profile "* ]]; then
+      current_profile=$(echo "$line" | cut -d' ' -f2 | tr -d '[]')
+    # Check if the line contains 'sso_session' to validate the profile
+    elif [[ "$line" == sso_session* ]]; then
+      profiles+=("$current_profile")
+    fi
+  done < ~/.aws/config
+
+  # Check if we found any valid profiles
+  if [[ ${#profiles[@]} -eq 0 ]]; then
+    echo "No profiles with sso-session found. Make sure your AWS config file (~/.aws/config) is set up correctly."
+    exit 1
+  fi
+
+  # Present profiles for user selection
+  select profile in "${profiles[@]}"; do
+    if [[ -n "$profile" ]]; then
+      AWS_PROFILE="$profile"
+      echo "You selected AWS profile: $AWS_PROFILE"
+      break
+    else
+      echo "Invalid selection. Please try again."
+    fi
+  done
+}
+
+# Function to perform AWS SSO login
+aws_login() {
+  echo "Logging into AWS SSO using profile: $AWS_PROFILE..."
+  AWS_PROFILE="$AWS_PROFILE" aws sso login || exit 1
+}
+
+# Function to fetch and display available AWS accounts
+fetch_accounts() {
+  echo "Fetching available accounts..."
+  accounts=$(AWS_PROFILE="$AWS_PROFILE" aws sso list-accounts --query "accountList[*].{ID:accountId,Name:accountName}" --output json)
+
+  if [[ -z "$accounts" ]]; then
+    echo "No accounts found for the selected profile."
+    exit 1
+  fi
+
+  # Display accounts in a readable format
+  echo "Available accounts:"
+  echo "$accounts" | jq -r '.[] | "\(.ID): \(.Name)"'
+}
+
+# Main script logic
+main() {
+  echo "Listing available AWS profiles..."
+  list_profiles
+  aws_login
+  fetch_accounts
+}
+
+# Execute the main function
+main
+

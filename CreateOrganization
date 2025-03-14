@@ -1,0 +1,84 @@
+#!/bin/bash
+
+# List available AWS CLI profiles
+echo "Available AWS CLI Profiles:"
+aws configure list-profiles
+
+# Prompt for AWS CLI Profile and Region
+read -p "Enter the AWS CLI Profile to use: " AWS_PROFILE
+read -p "Enter the AWS Region: " AWS_REGION
+
+# Perform AWS SSO Login
+echo "Logging in to AWS SSO..."
+aws sso login --profile "$AWS_PROFILE"
+
+# Set AWS CLI Profile and Region
+export AWS_PROFILE
+export AWS_REGION
+
+# Retrieve the Root OU ID
+ROOT_OU_ID=$(aws organizations list-roots --query "Roots[0].Id" --output text --region "$AWS_REGION" --profile "$AWS_PROFILE")
+
+if [[ -z "$ROOT_OU_ID" ]]; then
+    echo "❌ Error: Unable to retrieve the Root OU ID. Exiting."
+    exit 1
+fi
+
+echo "✅ Root OU ID: $ROOT_OU_ID"
+
+# Function to create an OU if it doesn't exist
+create_ou() {
+    local PARENT_ID=$1
+    local OU_NAME=$2
+
+    EXISTING_OU_ID=$(aws organizations list-organizational-units-for-parent --parent-id "$PARENT_ID" \
+        --query "OrganizationalUnits[?Name=='$OU_NAME'].Id" --output text --region "$AWS_REGION" --profile "$AWS_PROFILE")
+
+    if [[ -n "$EXISTING_OU_ID" ]]; then
+        echo "⚠️  OU '$OU_NAME' already exists (ID: $EXISTING_OU_ID)"
+    else
+        NEW_OU_ID=$(aws organizations create-organizational-unit --parent-id "$PARENT_ID" --name "$OU_NAME" \
+            --query "OrganizationalUnit.Id" --output text --region "$AWS_REGION" --profile "$AWS_PROFILE")
+
+        if [[ -n "$NEW_OU_ID" ]]; then
+            echo "✅ OU '$OU_NAME' created (ID: $NEW_OU_ID)"
+        else
+            echo "❌ Failed to create OU: $OU_NAME"
+        fi
+    fi
+}
+
+# Create Project OUs
+create_ou "$ROOT_OU_ID" "Website"
+WEBSITE_OU_ID=$(aws organizations list-organizational-units-for-parent --parent-id "$ROOT_OU_ID" \
+    --query "OrganizationalUnits[?Name=='Website'].Id" --output text --region "$AWS_REGION" --profile "$AWS_PROFILE")
+
+create_ou "$ROOT_OU_ID" "Mobile App"
+MOBILE_APP_OU_ID=$(aws organizations list-organizational-units-for-parent --parent-id "$ROOT_OU_ID" \
+    --query "OrganizationalUnits[?Name=='Mobile App'].Id" --output text --region "$AWS_REGION" --profile "$AWS_PROFILE")
+
+# Create Sub-OUs for Website Project
+create_ou "$WEBSITE_OU_ID" "Development"
+create_ou "$WEBSITE_OU_ID" "UAT"
+create_ou "$WEBSITE_OU_ID" "Production"
+
+# Create Backend OUs for Mobile App
+create_ou "$MOBILE_APP_OU_ID" "Backend"
+BACKEND_OU_ID=$(aws organizations list-organizational-units-for-parent --parent-id "$MOBILE_APP_OU_ID" \
+    --query "OrganizationalUnits[?Name=='Backend'].Id" --output text --region "$AWS_REGION" --profile "$AWS_PROFILE")
+
+create_ou "$BACKEND_OU_ID" "Development"
+create_ou "$BACKEND_OU_ID" "UAT"
+create_ou "$BACKEND_OU_ID" "Production"
+
+# Create Frontend OUs for Mobile App
+create_ou "$MOBILE_APP_OU_ID" "Frontend"
+FRONTEND_OU_ID=$(aws organizations list-organizational-units-for-parent --parent-id "$MOBILE_APP_OU_ID" \
+    --query "OrganizationalUnits[?Name=='Frontend'].Id" --output text --region "$AWS_REGION" --profile "$AWS_PROFILE")
+
+create_ou "$FRONTEND_OU_ID" "Development"
+create_ou "$FRONTEND_OU_ID" "UAT"
+create_ou "$FRONTEND_OU_ID" "Production"
+
+echo "✅ Organization structure successfully created!"
+
