@@ -1,0 +1,208 @@
+#!/bin/bash
+
+# ------------------------------------------------------------------------------
+# Script Name:    awsaccess
+# Description:    Manage IAM Identity Center operations such as users, groups,
+#                 permission sets, and account access.
+# Usage:          awsaccess [operation]
+# Operations:     
+#                 - list-users                List all users
+#                 - list-groups               List all groups
+#                 - list-permissionsets       List all permission sets
+#                 - create-user               Create a new user
+#                 - create-group              Create a new group
+#                 - create-permissionset      Create a new permission set
+#                 - add-user-to-group         Add a user to a group
+#                 - list-access-for-account   List users/groups/roles for an account
+#                 - assign-access             Assign users/groups to accounts
+#                 - revoke-access             Revoke user/group access to an account
+# Author:         Julio Cesar Garcia
+# Date:           2025-03-15
+# Version:        1.2
+# ------------------------------------------------------------------------------
+
+# Help Page Function
+show_help() {
+  echo "Usage: awsaccess [operation]"
+  echo "Manage IAM Identity Center users, groups, permission sets, and account access."
+  echo ""
+  echo "Operations:"
+  echo "  list-users                List all users"
+  echo "  list-groups               List all groups"
+  echo "  list-permissionsets       List all permission sets"
+  echo "  create-user               Create a new user"
+  echo "  create-group              Create a new group"
+  echo "  create-permissionset      Create a new permission set"
+  echo "  add-user-to-group         Add a user to a group"
+  echo "  list-access-for-account   List users/groups/roles for an account"
+  echo "  assign-access             Assign users/groups to accounts"
+  echo "  revoke-access             Revoke user/group access to an account"
+  echo ""
+  echo "Example Usage:"
+  echo "  awsaccess list-users"
+  echo "  awsaccess create-user"
+  echo "  awsaccess assign-access"
+  echo ""
+}
+
+# Function to handle errors
+handle_error() {
+  local exit_code=$1
+  local message=$2
+  echo "Error: $message (Exit Code: $exit_code)"
+  exit $exit_code
+}
+
+# Function to list all users
+list_users() {
+  echo "Listing all users..."
+  aws identitystore list-users --identity-store-id $(aws sso-admin list-instances --query "Instances[0].IdentityStoreId" --output text) --output table
+}
+
+# Function to list all groups
+list_groups() {
+  echo "Listing all groups..."
+  aws identitystore list-groups --identity-store-id $(aws sso-admin list-instances --query "Instances[0].IdentityStoreId" --output text) --output table
+}
+
+# Function to list all permission sets
+list_permissionsets() {
+  echo "Listing all permission sets..."
+  aws sso-admin list-permission-sets --instance-arn $(aws sso-admin list-instances --query "Instances[0].InstanceArn" --output text) --output table
+}
+
+# Function to create a new user
+create_user() {
+  local username email
+  read -p "Enter the username: " username
+  read -p "Enter the email address: " email
+
+  echo "Creating a new user: $username with email: $email..."
+  aws identitystore create-user --identity-store-id $(aws sso-admin list-instances --query "Instances[0].IdentityStoreId" --output text) \
+    --user-name "$username" --email "$email"
+}
+
+# Function to create a new group
+create_group() {
+  local group_name
+  read -p "Enter the group name: " group_name
+
+  echo "Creating a new group: $group_name..."
+  aws identitystore create-group --identity-store-id $(aws sso-admin list-instances --query "Instances[0].IdentityStoreId" --output text) \
+    --display-name "$group_name"
+}
+
+# Function to create a new permission set
+create_permissionset() {
+  local permissionset_name description
+  read -p "Enter the permission set name: " permissionset_name
+  read -p "Enter a description for the permission set: " description
+
+  echo "Creating a new permission set: $permissionset_name..."
+  aws sso-admin create-permission-set --instance-arn $(aws sso-admin list-instances --query "Instances[0].InstanceArn" --output text) \
+    --name "$permissionset_name" --description "$description"
+}
+
+# Function to add a user to a group
+add_user_to_group() {
+  local user_id group_id
+  echo "Fetching Identity Store ID..."
+  identity_store_id=$(aws sso-admin list-instances --query "Instances[0].IdentityStoreId" --output text)
+  read -p "Enter the user ID: " user_id
+  read -p "Enter the group ID: " group_id
+
+  echo "Adding user $user_id to group $group_id..."
+  aws identitystore create-group-membership --identity-store-id "$identity_store_id" \
+    --group-id "$group_id" --member-id "{ \"UserId\": \"$user_id\" }"
+}
+
+# Function to list access for a specific account
+list_access_for_account() {
+  local account_id
+  read -p "Enter the account ID: " account_id
+
+  echo "Listing access for account $account_id..."
+  aws sso-admin list-account-assignments --instance-arn $(aws sso-admin list-instances --query "Instances[0].InstanceArn" --output text) \
+    --account-id "$account_id" --output table
+}
+
+# Function to assign users/groups to an account
+assign_access() {
+  local account_id principal_type principal_id permissionset_arn
+  read -p "Enter the account ID: " account_id
+  read -p "Enter the principal type (USER/GROUP): " principal_type
+  read -p "Enter the principal ID: " principal_id
+  read -p "Enter the permission set ARN: " permissionset_arn
+
+  echo "Assigning $principal_type $principal_id to account $account_id with permission set $permissionset_arn..."
+  aws sso-admin create-account-assignment --instance-arn $(aws sso-admin list-instances --query "Instances[0].InstanceArn" --output text) \
+    --target-id "$account_id" --target-type AWS_ACCOUNT --principal-id "$principal_id" \
+    --principal-type "$principal_type" --permission-set-arn "$permissionset_arn"
+}
+
+# Function to revoke user/group access to an account
+revoke_access() {
+  local account_id principal_type principal_id permissionset_arn
+  read -p "Enter the account ID: " account_id
+  read -p "Enter the principal type (USER/GROUP): " principal_type
+  read -p "Enter the principal ID: " principal_id
+  read -p "Enter the permission set ARN: " permissionset_arn
+
+  echo "Revoking $principal_type $principal_id's access to account $account_id with permission set $permissionset_arn..."
+  aws sso-admin delete-account-assignment --instance-arn $(aws sso-admin list-instances --query "Instances[0].InstanceArn" --output text) \
+    --target-id "$account_id" --target-type AWS_ACCOUNT --principal-id "$principal_id" \
+    --principal-type "$principal_type" --permission-set-arn "$permissionset_arn"
+}
+
+# Main script logic
+main() {
+  if [ $# -eq 0 ]; then
+    show_help
+    exit 0
+  fi
+
+  case "$1" in
+    -h|--help)
+      show_help
+      ;;
+    list-users)
+      list_users
+      ;;
+    list-groups)
+      list_groups
+      ;;
+    list-permissionsets)
+      list_permissionsets
+      ;;
+    create-user)
+      create_user
+      ;;
+    create-group)
+      create_group
+      ;;
+    create-permissionset)
+      create_permissionset
+      ;;
+    add-user-to-group)
+      add_user_to_group
+      ;;
+    list-access-for-account)
+      list_access_for_account
+      ;;
+    assign-access)
+      assign_access
+      ;;
+    revoke-access)
+      revoke_access
+      ;;
+    *)
+      echo "Unknown operation: $1"
+      show_help
+      exit 1
+      ;;
+  esac
+}
+
+# Execute the main function
+main "$@"
+

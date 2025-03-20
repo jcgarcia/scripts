@@ -3,14 +3,14 @@
 # ------------------------------------------------------------------------------
 # Script Name:    example_script.sh
 # Description:    This script demonstrates adding comments and how it works.
-# Usage:          ./example_script.sh [options]
+# Usage:          example_script.sh [options]
 # Options:        -h | --help    Show this help message
 #                 -v | --version Show script version
-#                 -a | --optionA Description of option A
-#                 -b | --optionB Description of option B
+#                 -f | --format  Specify the output format (json, table, text)
+#                 -i | --info    Fetch AWS organization info in default format
 # Author:         Your Name
 # Date:           2025-02-28
-# Version:        1.1
+# Version:        1.2
 # ------------------------------------------------------------------------------
 
 # Display usage information
@@ -19,16 +19,21 @@ show_help() {
   echo "Options:"
   echo "  -h | --help    Show this help message"
   echo "  -v | --version Show script version"
-  echo "  -a | --optionA Description of option A"
-  echo "  -b | --optionB Description of option B"
+  echo "  -f | --format  Specify the output format (json, table, text)"
+  echo "  -i | --info    Fetch AWS organization info in default format (json)"
 }
 
 # Display script version
 show_version() {
-  echo "example_script.sh version 1.1"
+  echo "example_script.sh version 1.2"
 }
 
-# Enhanced error handling function
+# Default function when no arguments are provided
+default_function() {
+get_organization
+}
+
+# Error handling function
 handle_error() {
   local exit_code=$1
   local message=$2
@@ -45,10 +50,9 @@ trap cleanup EXIT
 
 # Main script logic
 main() {
-  # Check if no arguments were provided
   if [ $# -eq 0 ]; then
-    echo "No options were provided. Use -h or --help for usage information."
-    exit 1
+    default_function
+    exit 0
   fi
 
   # Parse command-line options
@@ -63,18 +67,12 @@ main() {
         exit 0
         ;;
       -f|--format)
-	    get_organization($2)
-        echo "Option A selected with value: $OPTION_A"
-        shift 2
-        ;;
-      -b|--optionB)
-        OPTION_B="$2"
-        echo "Option B selected with value: $OPTION_B"
+        get_organization "$2"
         shift 2
         ;;
       -i|--info)
-        get_organization
-		shift 2
+        get_organization "json" # Default format for -i is JSON
+        shift
         exit 0
         ;;
       *)
@@ -90,7 +88,18 @@ main() {
 
 ## begin of code
 get_organization() {
-  echo "Fetching AWS Organization information..."
+  local format="${1:-json}" # Default to JSON format if none provided
+
+  # Validate format input
+  case "$format" in
+    json|table|text)
+      ;;
+    *)
+      handle_error 1 "Invalid format: $format. Allowed values are json, table, or text."
+      ;;
+  esac
+
+  echo "Fetching AWS Organization information in '$format' format..."
 
   # Check if AWS CLI is installed
   if ! command -v aws &> /dev/null; then
@@ -99,12 +108,12 @@ get_organization() {
 
   # Check if AWS CLI is configured
   if ! aws sts get-caller-identity &> /dev/null; then
-    handle_error 1 "AWS CLI is not configured. Please configure it using 'aws configure'."
+    handle_error 1 "No token found. Please login first with awslogin"
   fi
 
   # Get organization details
   echo "Fetching organization details..."
-  organization_info=$(aws organizations describe-organization 2> /dev/null)
+  organization_info=$(aws organizations describe-organization --output "$format" 2> /dev/null)
   if [ $? -ne 0 ]; then
     handle_error 1 "Failed to fetch organization details. Please check your permissions."
   fi
@@ -113,7 +122,7 @@ get_organization() {
 
   # List accounts in the organization
   echo "Fetching list of accounts..."
-  accounts=$(aws organizations list-accounts 2> /dev/null)
+  accounts=$(aws organizations list-accounts --output "$format" 2> /dev/null)
   if [ $? -ne 0 ]; then
     handle_error 1 "Failed to list accounts. Please check your permissions."
   fi
@@ -129,7 +138,7 @@ get_organization() {
 
   # List organizational units
   echo "Fetching organizational units..."
-  ous=$(aws organizations list-organizational-units-for-parent --parent-id "$root_id" 2> /dev/null)
+  ous=$(aws organizations list-organizational-units-for-parent --parent-id "$root_id" --output "$format" 2> /dev/null)
   if [ $? -ne 0 ]; then
     handle_error 1 "Failed to fetch organizational units. Please check your permissions."
   fi
@@ -140,4 +149,3 @@ get_organization() {
 
 # Execute the main function
 main "$@"
-

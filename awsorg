@@ -1,31 +1,29 @@
 #!/bin/bash
 
 # ------------------------------------------------------------------------------
-# Script Name:    example_script.sh
-# Description:    This script demonstrates adding comments and how it works.
-# Usage:          ./example_script.sh [options]
+# Script Name:    awsorg.sh
+# Description:    Fetch and display AWS Organization layout in multiple formats.
+# Usage:          awsorg.sh [options]
 # Options:        -h | --help    Show this help message
 #                 -v | --version Show script version
-#                 -f | --format  Specify the output format (json, table, text)
-#                 -i | --info    Fetch AWS organization info in default format
-# Author:         Your Name
-# Date:           2025-02-28
-# Version:        1.2
+#                 -f | --format  Specify the output format (json, table, text, tree)
+# Author:         Julio
+# Date:           2025-03-15
+# Version:        3.0
 # ------------------------------------------------------------------------------
 
 # Display usage information
 show_help() {
-  echo "Usage: ./example_script.sh [options]"
+  echo "Usage: ./awsorg.sh [options]"
   echo "Options:"
   echo "  -h | --help    Show this help message"
   echo "  -v | --version Show script version"
-  echo "  -f | --format  Specify the output format (json, table, text)"
-  echo "  -i | --info    Fetch AWS organization info in default format (json)"
+  echo "  -f | --format  Specify the output format (json, table, text, tree)"
 }
 
 # Display script version
 show_version() {
-  echo "example_script.sh version 1.2"
+  echo "awsorg.sh version 3.0"
 }
 
 # Error handling function
@@ -36,19 +34,132 @@ handle_error() {
   exit $exit_code
 }
 
-# Cleanup function to handle temporary files or resources
+# Cleanup function to handle temporary files
 cleanup() {
   echo "Cleaning up temporary files..."
-  # Example: rm -f temp_file
 }
 trap cleanup EXIT
 
+# Recursive function to fetch and display organizational units and accounts
+fetch_tree_structure() {
+  local parent_id="$1"
+  local indent="$2"
+
+  # Fetch child OUs for the parent
+  ous=$(aws organizations list-organizational-units-for-parent --parent-id "$parent_id" --query "OrganizationalUnits" --output json 2> /dev/null)
+  if [ $? -ne 0 ]; then
+    handle_error 1 "Failed to fetch organizational units for parent ID $parent_id."
+  fi
+
+  # Process each child OU
+  echo "$ous" | jq -c '.[]' | while read -r ou; do
+    ou_id=$(echo "$ou" | jq -r '.Id')
+    ou_name=$(echo "$ou" | jq -r '.Name')
+    echo "${indent}OU: $ou_name (ID: $ou_id)"
+
+    # Fetch accounts within the current OU
+    accounts=$(aws organizations list-accounts-for-parent --parent-id "$ou_id" --query "Accounts" --output json 2> /dev/null)
+    if [ $? -ne 0 ]; then
+      handle_error 1 "Failed to fetch accounts for OU ID $ou_id."
+    fi
+
+    echo "$accounts" | jq -c '.[]' | while read -r account; do
+      account_id=$(echo "$account" | jq -r '.Id')
+      account_name=$(echo "$account" | jq -r '.Name')
+      echo "${indent}  Account: $account_name (ID: $account_id)"
+    done
+
+    # Recursive call to fetch sub-OUs
+    fetch_tree_structure "$ou_id" "  $indent"
+  done
+
+  # Fetch accounts directly under the current parent (if no OUs are present)
+  accounts=$(aws organizations list-accounts-for-parent --parent-id "$parent_id" --query "Accounts" --output json 2> /dev/null)
+  if [ $? -ne 0 ]; then
+    handle_error 1 "Failed to fetch accounts for parent ID $parent_id."
+  fi
+
+  echo "$accounts" | jq -c '.[]' | while read -r account; do
+    account_id=$(echo "$account" | jq -r '.Id')
+    account_name=$(echo "$account" | jq -r '.Name')
+    echo "${indent}Account: $account_name (ID: $account_id)"
+  done
+}
+
+# Function to fetch and display organization details in the selected format
+get_organization() {
+  local format="${1:-json}" # Default to JSON format if none provided
+
+  # Validate format input
+  case "$format" in
+    json|table|text|tree)
+      ;;
+    *)
+      handle_error 1 "Invalid format: $format. Allowed values are json, table, text, or tree."
+      ;;
+  esac
+
+  echo "Fetching AWS Organization information in '$format' format..."
+
+  # Check if AWS CLI is installed
+  if ! command -v aws &> /dev/null; then
+    handle_error 1 "AWS CLI is not installed. Please install it first."
+  fi
+
+  # Check if AWS CLI is configured
+  if ! aws sts get-caller-identity &> /dev/null; then
+    handle_error 1 "No token found. Please login first with awslogin."
+  fi
+
+  if [ "$format" == "tree" ]; then
+    # Tree format output
+    echo "Fetching root ID..."
+    root_id=$(aws organizations list-roots --query "Roots[0].Id" --output text 2> /dev/null)
+    if [ $? -ne 0 ]; then
+      handle_error 1 "Failed to fetch root ID. Please check your permissions."
+    fi
+
+    echo "Root: (ID: $root_id)"
+    fetch_tree_structure "$root_id" "  "
+  else
+    # Standard AWS CLI-supported formats
+    echo "Fetching organization details..."
+    organization_info=$(aws organizations describe-organization --output "$format" 2> /dev/null)
+    if [ $? -ne 0 ]; then
+      handle_error 1 "Failed to fetch organization details. Please check your permissions."
+    fi
+    echo "Organization Details:"
+    echo "$organization_info"
+
+    echo "Fetching list of accounts..."
+    accounts=$(aws organizations list-accounts --output "$format" 2> /dev/null)
+    if [ $? -ne 0 ]; then
+      handle_error 1 "Failed to list accounts. Please check your permissions."
+    fi
+    echo "Accounts:"
+    echo "$accounts"
+
+    echo "Fetching root ID..."
+    root_id=$(aws organizations list-roots --query "Roots[0].Id" --output text 2> /dev/null)
+    if [ $? -ne 0 ]; then
+      handle_error 1 "Failed to fetch root ID."
+    fi
+
+    echo "Fetching organizational units..."
+    ous=$(aws organizations list-organizational-units-for-parent --parent-id "$root_id" --output "$format" 2> /dev/null)
+    if [ $? -ne 0 ]; then
+      handle_error 1 "Failed to fetch organizational units. Please check your permissions."
+    fi
+    echo "Organizational Units:"
+    echo "$ous"
+  fi
+}
+
 # Main script logic
 main() {
-  # Check if no arguments were provided
   if [ $# -eq 0 ]; then
-    echo "No options were provided. Use -h or --help for usage information."
-    exit 1
+    get_organization "json" # Default to JSON output if no arguments provided
+    exit 0
   fi
 
   # Parse command-line options
@@ -66,11 +177,6 @@ main() {
         get_organization "$2"
         shift 2
         ;;
-      -i|--info)
-        get_organization "json" # Default format for -i is JSON
-        shift
-        exit 0
-        ;;
       *)
         echo "Unknown option: $1"
         show_help
@@ -80,68 +186,6 @@ main() {
   done
 }
 
-# Insert your code below.
-
-## begin of code
-get_organization() {
-  local format="${1:-json}" # Default to JSON format if none provided
-
-  # Validate format input
-  case "$format" in
-    json|table|text)
-      ;;
-    *)
-      handle_error 1 "Invalid format: $format. Allowed values are json, table, or text."
-      ;;
-  esac
-
-  echo "Fetching AWS Organization information in '$format' format..."
-
-  # Check if AWS CLI is installed
-  if ! command -v aws &> /dev/null; then
-    handle_error 1 "AWS CLI is not installed. Please install it first."
-  fi
-
-  # Check if AWS CLI is configured
-  if ! aws sts get-caller-identity &> /dev/null; then
-    handle_error 1 "AWS CLI is not configured. Please configure it using 'aws configure'."
-  fi
-
-  # Get organization details
-  echo "Fetching organization details..."
-  organization_info=$(aws organizations describe-organization --output "$format" 2> /dev/null)
-  if [ $? -ne 0 ]; then
-    handle_error 1 "Failed to fetch organization details. Please check your permissions."
-  fi
-  echo "Organization Details:"
-  echo "$organization_info"
-
-  # List accounts in the organization
-  echo "Fetching list of accounts..."
-  accounts=$(aws organizations list-accounts --output "$format" 2> /dev/null)
-  if [ $? -ne 0 ]; then
-    handle_error 1 "Failed to list accounts. Please check your permissions."
-  fi
-  echo "Accounts:"
-  echo "$accounts"
-
-  # Fetch the root ID
-  echo "Fetching root ID..."
-  root_id=$(aws organizations list-roots --query "Roots[0].Id" --output text 2> /dev/null)
-  if [ $? -ne 0 ]; then
-    handle_error 1 "Failed to fetch root ID. Please check your permissions."
-  fi
-
-  # List organizational units
-  echo "Fetching organizational units..."
-  ous=$(aws organizations list-organizational-units-for-parent --parent-id "$root_id" --output "$format" 2> /dev/null)
-  if [ $? -ne 0 ]; then
-    handle_error 1 "Failed to fetch organizational units. Please check your permissions."
-  fi
-  echo "Organizational Units:"
-  echo "$ous"
-}
-## end of code
-
 # Execute the main function
 main "$@"
+

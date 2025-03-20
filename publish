@@ -1,0 +1,125 @@
+#!/bin/bash
+
+# ------------------------------------------------------------------------------
+# Script Name:    publish
+# Description:    Prepares the distribution package for publishing to GitHub.
+#                 Creates the necessary structure, archives valid scripts, sets
+#                 up Git remote, and prepares for SSH-based push.
+# Usage:          publish
+# Author:         Julio Cesar Garcia
+# Date:           20/03/2025
+# Version:        1.7
+# ------------------------------------------------------------------------------
+
+# Load configuration from .jcscripts
+if [[ -f ".jcscripts" ]]; then
+  source .jcscripts
+else
+  echo "ERROR: Missing .jcscripts configuration file. Please ensure it exists before running this script."
+  exit 1
+fi
+
+# Define the GitHub repository URL
+GITHUB_REPO="git@github.com:jcgarcia/jcscripts.git"
+SSH_KEY_PATH="~/.ssh/jc.pem"
+
+# Create the necessary directory structure for the distribution
+prepare_structure() {
+  echo "Preparing distribution structure..."
+
+  # Define the distribution directory
+  DIST_DIR="./dist"
+
+  # Clean up previous distribution if it exists
+  if [[ -d "$DIST_DIR" ]]; then
+    echo "Removing existing distribution directory..."
+    rm -rf "$DIST_DIR"
+  fi
+
+  # Create necessary folders
+  mkdir -p "$DIST_DIR/lib"
+
+  # Copy core files
+  cp README.md "$DIST_DIR/"
+  cp README.pdf "$DIST_DIR/"
+  cp .jcscripts "$DIST_DIR/"
+  cp installscripts "$DIST_DIR/"
+
+  echo "Distribution structure prepared."
+  echo
+}
+
+# Archive valid scripts into scripts.ar
+archive_scripts() {
+  echo "Archiving valid scripts into library..."
+
+  # Check if the scripts directory exists
+  if [[ ! -d "$SCRIPTS_DIR" ]]; then
+    echo "ERROR: Scripts directory ($SCRIPTS_DIR) does not exist. Please ensure it is defined in .jcscripts."
+    exit 1
+  fi
+
+  # Create the archive file
+  local archive_path="./dist/lib/scripts.ar"
+
+  # Loop through files and include only valid executable scripts without an extension
+  for script in "$SCRIPTS_DIR"/*; do
+    if [[ -f "$script" && -x "$script" && "$script" == "${script%.*}" ]]; then
+      echo "Adding $script to $archive_path"
+      ar rcs "$archive_path" "$script"
+    else
+      echo "Skipping invalid or non-script file: $script"
+    fi
+  done
+
+  echo "Valid scripts archived into $archive_path."
+  echo
+}
+
+# Set up Git in the dist directory
+setup_git_remote() {
+  echo "Setting up Git repository for the distribution..."
+
+  # Navigate to the distribution directory
+  cd "$DIST_DIR" || exit 1
+
+  # Initialize a new Git repository with `main` as the default branch
+  git init --initial-branch=main
+
+  # Configure the SSH key for the repository
+  GIT_SSH_COMMAND="ssh -i $SSH_KEY_PATH" git remote add origin "$GITHUB_REPO"
+
+  echo "Git repository initialized with 'main' as the default branch and remote set to $GITHUB_REPO."
+  echo
+}
+
+# Main function
+main() {
+  echo "Starting publish process..."
+
+  # Ensure core files exist
+  if [[ ! -f "README.md" || ! -f "README.pdf" || ! -f ".jcscripts" || ! -f "installscripts" ]]; then
+    echo "ERROR: Missing core files (README.md, README.pdf, .jcscripts, or installscripts). Ensure these files are in the repository root."
+    exit 1
+  fi
+
+  # Prepare the distribution structure
+  prepare_structure
+
+  # Archive valid scripts into the library
+  archive_scripts
+
+  # Set up Git repository for the distribution
+  setup_git_remote
+
+  echo "Publish process completed successfully."
+  echo "You can now push the distribution to GitHub by running the following commands:"
+  echo
+  echo "  cd dist"
+  echo "  GIT_SSH_COMMAND='ssh -i $SSH_KEY_PATH' git add ."
+  echo "  GIT_SSH_COMMAND='ssh -i $SSH_KEY_PATH' git commit -m 'Publishing scripts distribution'"
+  echo "  GIT_SSH_COMMAND='ssh -i $SSH_KEY_PATH' git push -u origin main"
+}
+
+# Execute the main function
+main

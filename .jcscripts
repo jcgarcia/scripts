@@ -1,0 +1,3 @@
+# Configuration for scripts
+EDITOR=vi
+SCRIPTS_DIR=~/scripts

@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# ------------------------------------------------------------------------------
+# Script Name:    scripts
+# Description:    Lists all valid scripts in the ~/scripts directory (ignoring 
+#                 files with extensions). Extracts the header information
+#                 (Script Name, Description, Usage, etc.) or outputs just the
+#                 script names in columns with the -s|--short option.
+# Usage:          list_script_headers.sh [-s|--short]
+# Author:         Julio Cesar Garcia
+# Date:           20/03/2025
+# Version:        Short Option Fixed
+# ------------------------------------------------------------------------------
+
+# Define the directory to search for scripts
+SCRIPTS_DIR=~/scripts
+
+# Function to extract and display header information
+extract_header() {
+  local script="$1"
+  echo "$(basename "$script")"
+  echo "--------------------------------------"
+  
+  # Extract labeled header fields
+  grep -E "^(# *(Script Name|Description|Usage|Author|Date|Version):)" "$script" \
+    | sed 's/^# *//'
+  
+  echo
+}
+
+# Function to list script names in columns
+list_short() {
+  local scripts="$1"
+
+  # Extract only the script names, ensuring single arguments per basename
+  for script in $scripts; do
+    basename "$script"
+  done | column
+}
+
+# Main function
+main() {
+  # Check if the scripts directory exists
+  if [[ ! -d "$SCRIPTS_DIR" ]]; then
+    echo "ERROR: Directory $SCRIPTS_DIR does not exist."
+    exit 1
+  fi
+
+  # Find all valid executable files without extensions
+  local scripts
+  scripts=$(find "$SCRIPTS_DIR" -type f ! -name "*.*" -exec file {} + | grep "ASCII text executable" | cut -d: -f1)
+
+  if [[ -z "$scripts" ]]; then
+    echo "No valid scripts found in $SCRIPTS_DIR."
+    exit 0
+  fi
+
+  # Check for the -s or --short option
+  if [[ "$1" == "-s" || "$1" == "--short" ]]; then
+    list_short "$scripts"
+    exit 0
+  fi
+
+  # Default: Display detailed header information for each script
+  for script in $scripts; do
+    extract_header "$script"
+  done
+}
+
+# Execute the main function
+main "$@"
+

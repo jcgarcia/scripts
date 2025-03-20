@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # ------------------------------------------------------------------------------
-# Script Name:    aws_sso_dynamic_default.sh
+# Script Name:    awslogin
 # Description:    Dynamically sets AWS default profile after SSO login, while hiding the default profile from selection.
-# Usage:          ./aws_sso_dynamic_default.sh
-# Author:         Copilot
-# Date:           Today!
+# Usage:          aws_sso_dynamic_default.sh
+# Author:         Julio Cesar Garcia
+# Date:           20/03/2025
 # Version:        Default Profile Integration with Filtering
 # ------------------------------------------------------------------------------
 

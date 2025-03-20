@@ -1,0 +1,155 @@
+#!/bin/bash
+
+# ------------------------------------------------------------------------------
+# Script Name:    example_script.sh
+# Description:    This script demonstrates retrieving AWS resource information.
+# Usage:          example_script.sh [options]
+# Options:        -h | --help        Show this help message
+#                 -v | --version     Show script version
+#                 -r | --resources   Fetch and display AWS resources info
+# Author:         Your Name
+# Date:           2025-02-28
+# Version:        2.0
+# ------------------------------------------------------------------------------
+
+# Display usage information
+show_help() {
+  echo "Usage: ./example_script.sh [options]"
+  echo "Options:"
+  echo "  -h | --help        Show this help message"
+  echo "  -v | --version     Show script version"
+  echo "  -r | --resources   Fetch and display AWS resources info"
+}
+
+# Display script version
+show_version() {
+  echo "example_script.sh version 2.0"
+}
+
+# Default function when no arguments are provided
+default_function() {
+aws_resources
+}
+
+aws_resources2() {
+# List EC2 instances
+echo "EC2 Instances:"
+aws ec2 describe-instances  --query 'Reservations[*].Instances[*].[InstanceId,InstanceType,State.Name,PublicIpAddress]' --output table
+echo "-----------------------------------------------"
+
+# List S3 buckets
+echo "S3 Buckets:"
+aws s3 ls 
+echo "-----------------------------------------------"
+
+# List RDS instances
+echo "RDS Instances:"
+aws rds describe-db-instances  --query 'DBInstances[*].[DBInstanceIdentifier,DBInstanceClass,Engine,DBInstanceStatus]' --output table
+echo "-----------------------------------------------"
+
+# List Lambda functions
+echo "Lambda Functions:"
+aws lambda list-functions  --query 'Functions[*].[FunctionName,Runtime,LastModified]' --output table
+echo "-----------------------------------------------"
+
+# List ECS clusters
+echo "ECS Clusters:"
+aws ecs list-clusters  --query 'clusterArns' --output table
+echo "-----------------------------------------------"
+
+# List EKS clusters
+echo "EKS Clusters:"
+aws eks list-clusters  --query 'clusters' --output table
+echo "-----------------------------------------------"
+
+# List CloudFormation stacks
+echo "CloudFormation Stacks:"
+aws cloudformation list-stacks  --query 'StackSummaries[*].[StackName,StackStatus,CreationTime]' --output table
+echo "-----------------------------------------------"
+
+# List IAM roles
+echo "IAM Roles:"
+aws iam list-roles  --query 'Roles[*].[RoleName,Arn]' --output table
+echo "-----------------------------------------------"
+
+# List DynamoDB tables
+echo "DynamoDB Tables:"
+aws dynamodb list-tables  --query 'TableNames' --output table
+echo "-----------------------------------------------"
+
+# List SQS queues
+echo "SQS Queues:"
+aws sqs list-queues  --query 'QueueUrls' --output table
+echo "-----------------------------------------------"
+
+# List SNS topics
+echo "SNS Topics:"
+aws sns list-topics  --query 'Topics[*].[TopicArn]' --output table
+echo "-----------------------------------------------"
+
+echo "Resource check complete."
+
+}
+# Function to fetch AWS resources and their statuses
+aws_resources() {
+  echo "Retrieving information about AWS resources and their statuses..."
+  echo "This may take a moment..."
+
+  # Ensure AWS CLI is configured
+  if ! aws sts get-caller-identity &> /dev/null; then
+    echo "Error: AWS CLI is not configured. Please configure it using 'aws configure'."
+    exit 1
+  fi
+
+  # Fetch a list of all resources using AWS CLI
+  resources=$(aws resourcegroupstaggingapi get-resources --output json)
+  
+  if [ $? -ne 0 ]; then
+    echo "Failed to retrieve resources. Please check your AWS permissions."
+    exit 1
+  fi
+
+  echo "Resources and their statuses:"
+  echo "$resources" | jq '.ResourceTagMappingList[] | {ResourceARN: .ResourceARN, Tags: .Tags}'
+}
+
+# Main script logic
+main() {
+  # Check if no arguments were provided
+  if [ $# -eq 0 ]; then
+    default_function
+    exit 0
+  fi
+
+  # Parse command-line options
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)
+        show_help
+        exit 0
+        ;;
+      -v|--version)
+        show_version
+        exit 0
+        ;;
+      -r|--resources)
+        aws_resources
+        exit 0
+        ;;
+      -2|--r2)
+        aws_resources2
+        exit 0
+        ;;
+      *)
+        echo "Unknown option: $1"
+        show_help
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+# Execute the main function
+main "$@"
+

@@ -1,0 +1,103 @@
+#!/bin/bash
+
+# ------------------------------------------------------------------------------
+# Script Name:    aws_move_account.sh
+# Description:    Fixed script to move a newly created AWS account within the organization.
+# Usage:          aws_move_account.sh
+# Author:         Julio
+# Date:           2025-03-15
+# Version:        5.0
+# ------------------------------------------------------------------------------
+
+# Function to handle errors
+handle_error() {
+  local exit_code=$1
+  local message=$2
+  echo "Error: $message (Exit Code: $exit_code)"
+  exit $exit_code
+}
+
+# Function to validate AWS CLI installation and credentials
+validate_aws() {
+  if ! command -v aws &> /dev/null; then
+    handle_error 1 "AWS CLI is not installed. Please install it first."
+  fi
+
+  if ! aws sts get-caller-identity &> /dev/null; then
+    handle_error 1 "No valid AWS session. Please log in first."
+  fi
+}
+
+# Function to fetch the AWS Organization Root ID using the management account
+fetch_organization_root_id() {
+  echo "Fetching root ID for the AWS organization..."
+  local org_root_id
+  org_root_id=$(aws organizations list-roots --query "Roots[0].Id" --output text 2> /dev/null)
+  if [ $? -ne 0 ] || [ -z "$org_root_id" ]; then
+    handle_error 1 "Failed to fetch the organization's root ID. Please check your credentials and permissions."
+  fi
+  echo "Organization Root ID: $org_root_id"
+  echo "$org_root_id"
+}
+
+# Function to fetch the account’s current parent ID
+fetch_account_parent_id() {
+  local account_id="$1"
+  echo "Fetching source parent ID for the account..."
+  local parent_id
+  parent_id=$(aws organizations list-parents --child-id "$account_id" --query "Parents[0].Id" --output text 2> /dev/null)
+  if [ $? -ne 0 ] || [ -z "$parent_id" ]; then
+    handle_error 1 "Failed to fetch the account's source parent ID. Please check the account's hierarchy."
+  fi
+  echo "Source Parent ID: $parent_id"
+  echo "$parent_id"
+}
+
+# Function to move an account
+move_account() {
+  local account_id org_root_id source_parent_id
+
+  read -p "Enter the Account ID to move: " account_id
+  if [[ ! $account_id =~ ^[0-9]{12}$ ]]; then
+    handle_error 1 "Invalid Account ID. It must be a 12-digit number."
+  fi
+
+  # Fetch organization root ID using the management account
+  org_root_id=$(fetch_organization_root_id)
+
+  # Fetch the current parent ID of the account
+  source_parent_id=$(fetch_account_parent_id "$account_id")
+
+  # Validate account status
+  echo "Validating account status..."
+  account_status=$(aws organizations describe-account --account-id "$account_id" --query "Account.Status" --output text 2> /dev/null)
+  if [ $? -ne 0 ]; then
+    handle_error 1 "Unable to retrieve the account status. Ensure the account exists and you have sufficient permissions."
+  fi
+  echo "Account status: $account_status"
+
+  if [ "$account_status" != "ACTIVE" ]; then
+    handle_error 1 "The account is not in an ACTIVE state. Moving it is not allowed."
+  fi
+
+  echo "Moving account $account_id from $source_parent_id to $org_root_id..."
+  aws organizations move-account --account-id "$account_id" --source-parent-id "$source_parent_id" --destination-parent-id "$org_root_id"
+  if [ $? -ne 0 ]; then
+    handle_error 1 "Failed to move the account. Verify your permissions and input."
+  fi
+
+  echo "Account $account_id successfully moved from $source_parent_id to the organization root ID $org_root_id."
+}
+
+# Main script execution
+main() {
+  echo "Validating AWS CLI and credentials..."
+  validate_aws
+
+  echo "Starting MoveAccount operation..."
+  move_account
+}
+
+# Trigger main function
+main "$@"
+

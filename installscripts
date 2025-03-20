@@ -1,0 +1,144 @@
+#!/bin/bash
+
+# ------------------------------------------------------------------------------
+# Script Name:    installscripts
+# Description:    Sets up the environment for the scripts repository. Extracts
+#                 scripts from the library, makes them executable, and updates PATH.
+# Usage:          installscripts
+# Author:         Julio Cesar Garcia
+# Date:           20/03/2025
+# Version:        2.0
+# ------------------------------------------------------------------------------
+
+# Define a marker file to track installation status
+MARKER_FILE="$HOME/.scripts_installed"
+
+# Function to check for the required files
+validate_distribution() {
+  local missing_files=0
+
+  echo "Validating distribution..."
+
+  # Check for README.md
+  if [[ ! -f "README.md" ]]; then
+    echo "ERROR: Missing README.md"
+    missing_files=1
+  fi
+
+  # Check for .jcscripts
+  if [[ ! -f ".jcscripts" ]]; then
+    echo "ERROR: Missing .jcscripts"
+    missing_files=1
+  fi
+
+  # Check for installscripts itself
+  if [[ ! -f "installscripts" ]]; then
+    echo "ERROR: Missing installscripts script"
+    missing_files=1
+  fi
+
+  # Check for the library file ./lib/scripts.ar
+  if [[ ! -f "./lib/scripts.ar" ]]; then
+    echo "ERROR: Missing library file ./lib/scripts.ar"
+    missing_files=1
+  fi
+
+  # If any required file is missing, exit with a message
+  if [[ $missing_files -eq 1 ]]; then
+    echo
+    echo "This is not a valid distribution. Please download the correct distribution from GitHub."
+    echo "You can clone the repository with the following command:"
+    echo
+    echo "  git clone https://github.com/yourusername/scripts-collection.git"
+    echo
+    exit 1
+  fi
+
+  echo "Distribution is valid."
+  echo
+}
+
+# Function to check if the setup has already been completed
+check_existing_installation() {
+  if [[ -f "$MARKER_FILE" ]]; then
+    echo "The scripts repository has already been installed."
+    echo "If you want to reinstall, please remove the marker file:"
+    echo "  rm $MARKER_FILE"
+    exit 0
+  fi
+}
+
+# Function to extract scripts from the library
+extract_scripts() {
+  echo "Extracting scripts from library..."
+  
+  # Load SCRIPTS_DIR from .jcscripts
+  source .jcscripts
+
+  mkdir -p "$SCRIPTS_DIR"
+  ar -x ./lib/scripts.ar -C "$SCRIPTS_DIR"
+  
+  echo "Scripts extracted to $SCRIPTS_DIR."
+  echo
+}
+
+# Function to make valid scripts executable
+make_scripts_executable() {
+  echo "Making valid scripts executable..."
+  find "$SCRIPTS_DIR" -type f -exec file {} + | grep "ASCII text executable" | cut -d: -f1 | xargs chmod +x
+  echo "Scripts made executable."
+  echo
+}
+
+# Function to add the directory to PATH
+add_to_path() {
+  # Load SCRIPTS_DIR from .jcscripts
+  source .jcscripts
+
+  # Check if the directory is already in PATH
+  if [[ ":$PATH:" == *":$SCRIPTS_DIR:"* ]]; then
+    echo "Scripts directory is already in the PATH."
+  else
+    # Add to shell configuration
+    echo "Adding scripts directory to PATH..."
+    echo "export PATH=\"\$PATH:$SCRIPTS_DIR\"" >> ~/.bashrc
+    source ~/.bashrc
+    echo "Scripts directory added to PATH."
+  fi
+  echo
+}
+
+# Function to create the marker file
+mark_installation() {
+  echo "Marking the installation as complete..."
+  touch "$MARKER_FILE"
+  echo "Installation marked with $MARKER_FILE."
+}
+
+# Main function
+main() {
+  echo "Setting up the environment for scripts repository..."
+
+  # Check for existing installation
+  check_existing_installation
+
+  # Validate the current directory
+  validate_distribution
+
+  # Extract the scripts
+  extract_scripts
+
+  # Make valid scripts executable
+  make_scripts_executable
+
+  # Add the directory to PATH
+  add_to_path
+
+  # Mark the installation
+  mark_installation
+
+  echo "Setup complete! You can now run the scripts from any location."
+}
+
+# Execute the main function
+main

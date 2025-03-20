@@ -3,9 +3,9 @@
 # ------------------------------------------------------------------------------
 # Script Name:    aws_sso_token_login.sh
 # Description:    Reads AWS SSO token from cache, dynamically selects accounts and roles, and applies temporary credentials.
-# Usage:          ./aws_sso_token_login.sh
-# Author:         Copilot
-# Date:           Today!
+# Usage:          aws_sso_token_login.sh
+# Author:         Julio Cesar Garcia
+# Date:           20/03/2025
 # Version:        Final Debug-Enhanced Version
 # ------------------------------------------------------------------------------
 

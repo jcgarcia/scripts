@@ -3,9 +3,9 @@
 # ------------------------------------------------------------------------------
 # Script Name:    aws_sso_dynamic_default.sh
 # Description:    Dynamically sets AWS default profile after SSO login, while clearing cached tokens to force fresh login.
-# Usage:          ./aws_sso_dynamic_default.sh
-# Author:         Copilot
-# Date:           Today!
+# Usage:          aws_sso_dynamic_default.sh
+# Author:         Julio Cesar Garcia
+# Date:           20/03/2025
 # Version:        Cache Clearing Integration
 # ------------------------------------------------------------------------------
 

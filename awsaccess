@@ -1,0 +1,131 @@
+#!/bin/bash
+
+# ------------------------------------------------------------------------------
+# Script Name:    awsaccess
+# Description:    Manage IAM Identity Center operations such as users, groups,
+#                 permission sets, and account access.
+# Usage:          awsaccess [operation]
+# Operations:     
+#                 - list-users                List all users
+#                 - list-groups               List all groups
+#                 - list-permissionsets       List all permission sets
+#                 - create-user               Create a new user
+#                 - create-group              Create a new group
+#                 - create-permissionset      Create a new permission set
+# Author:         Julio Cesar Garcia
+# Date:           2025-03-15
+# Version:        1.9
+# ------------------------------------------------------------------------------
+
+# Help Page Function
+show_help() {
+  echo "Usage: awsaccess [operation]"
+  echo "Manage IAM Identity Center users, groups, permission sets, and account access."
+  echo ""
+  echo "Operations:"
+  echo "  list-users                List all users"
+  echo "  list-groups               List all groups"
+  echo "  list-permissionsets       List all permission sets"
+  echo "  create-user               Create a new user"
+  echo "  create-group              Create a new group"
+  echo "  create-permissionset      Create a new permission set"
+  echo ""
+  echo "Example Usage:"
+  echo "  awsaccess list-users"
+  echo "  awsaccess create-user"
+  echo "  awsaccess assign-access"
+  echo ""
+}
+
+# Function to handle errors
+handle_error() {
+  local exit_code=$1
+  local message=$2
+  echo "ERROR: $message (Exit Code: $exit_code)" >&2
+  exit $exit_code
+}
+
+# Validate AWS session
+validate_session() {
+  echo "[DEBUG] Validating AWS session..."
+  aws sts get-caller-identity &> /dev/null
+  if [ $? -ne 0 ]; then
+    echo "[DEBUG] AWS session expired or invalid. Attempting to refresh..."
+    awslogin
+    aws sts get-caller-identity &> /dev/null
+    if [ $? -ne 0 ]; then
+      handle_error 1 "Failed to refresh AWS session. Please log in manually."
+    fi
+  fi
+  echo "[DEBUG] AWS session is valid."
+}
+
+# Fetch Identity Store ID
+fetch_identity_store_id() {
+  echo "[DEBUG] Fetching Identity Store ID..."
+  local identity_store_id
+  identity_store_id=$(aws sso-admin list-instances --query "Instances[0].IdentityStoreId" --output text 2>/dev/null)
+  if [[ -z "$identity_store_id" || "$identity_store_id" == "null" || ! "$identity_store_id" =~ ^d-[0-9a-f]{10}$ ]]; then
+    handle_error 1 "Failed to retrieve a valid Identity Store ID. Please ensure IAM Identity Center is correctly configured."
+  fi
+  echo "$identity_store_id"
+}
+
+# Fetch Instance ARN
+fetch_instance_arn() {
+  echo "[DEBUG] Fetching Instance ARN..."
+  local instance_arn
+  instance_arn=$(aws sso-admin list-instances --query "Instances[0].InstanceArn" --output text 2>/dev/null)
+  if [[ -z "$instance_arn" || "$instance_arn" == "null" ]]; then
+    handle_error 1 "Failed to retrieve a valid Instance ARN. Ensure IAM Identity Center is properly configured."
+  fi
+  echo "$instance_arn"
+}
+
+# Function to list all users
+list_users() {
+  validate_session
+  local identity_store_id
+  identity_store_id=$(fetch_identity_store_id)
+  echo "[DEBUG] Using Identity Store ID: $identity_store_id"
+  echo "Listing all users..."
+  aws identitystore list-users --identity-store-id "$identity_store_id" --output table || handle_error 1 "Failed to list users. Ensure sufficient permissions for IAM Identity Store."
+}
+
+# Function to list all groups
+list_groups() {
+  validate_session
+  local identity_store_id
+  identity_store_id=$(fetch_identity_store_id)
+  echo "[DEBUG] Using Identity Store ID: $identity_store_id"
+  echo "Listing all groups..."
+  aws identitystore list-groups --identity-store-id "$identity_store_id" --output table || handle_error 1 "Failed to list groups. Ensure sufficient permissions for IAM Identity Store."
+}
+
+# Main script logic
+main() {
+  if [ $# -eq 0 ]; then
+    show_help
+    exit 0
+  fi
+
+  case "$1" in
+    -h|--help)
+      show_help
+      ;;
+    list-users)
+      list_users
+      ;;
+    list-groups)
+      list_groups
+      ;;
+    *)
+      echo "Unknown operation: $1"
+      show_help
+      exit 1
+      ;;
+  esac
+}
+
+# Execute the main function
+main "$@"

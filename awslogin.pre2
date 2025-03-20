@@ -3,7 +3,7 @@
 # ------------------------------------------------------------------------------
 # Script Name:    aws_sso_login.sh
 # Description:    Automates AWS SSO login and account selection for profiles with sso-session.
-# Usage:          ./aws_sso_login.sh
+# Usage:          aws_sso_login.sh
 # Author:         Your Name
 # Date:           2025-03-12
 # Version:        1.9

@@ -3,7 +3,7 @@
 # ------------------------------------------------------------------------------
 # Script Name:    example_script.sh
 # Description:    This script demonstrates adding comments and how it works.
-# Usage:          ./example_script.sh [options]
+# Usage:          example_script.sh [options]
 # Options:        -h | --help    Show this help message
 #                 -v | --version Show script version
 #                 -a | --optionA Description of option A

@@ -1,0 +1,141 @@
+#!/bin/bash
+
+# ------------------------------------------------------------------------------
+# Script Name:    awsnewaccount
+# Description:    Create a new AWS account, wait for creation, and verify membership in the organization.
+# Usage:          awsnewaccount.sh
+# Author:         Julio
+# Date:           2025-03-15
+# Version:        2.1
+# ------------------------------------------------------------------------------
+
+# Function to handle errors
+handle_error() {
+  local exit_code=$1
+  local message=$2
+  echo "Error: $message (Exit Code: $exit_code)"
+  exit $exit_code
+}
+
+# Function to validate AWS CLI installation and credentials
+validate_aws() {
+  if ! command -v aws &> /dev/null; then
+    handle_error 1 "AWS CLI is not installed. Please install it first."
+  fi
+
+  if ! aws sts get-caller-identity &> /dev/null; then
+    handle_error 1 "No valid AWS session. Please log in first."
+  fi
+}
+
+# Function to check if an account is part of the organization
+check_account_membership() {
+  local account_id="$1"
+  echo "Checking if account $account_id is part of the organization..."
+  accounts_list=$(aws organizations list-accounts --query "Accounts[].Id" --output text 2> /dev/null)
+  if [ $? -ne 0 ]; then
+    handle_error 1 "Failed to retrieve accounts list. Please check your permissions."
+  fi
+
+  if [[ $accounts_list =~ $account_id ]]; then
+    echo "Account $account_id is already part of the organization."
+    return 0
+  else
+    echo "Account $account_id is NOT part of the organization."
+    return 1
+  fi
+}
+
+# Function to create a new AWS account
+create_account() {
+  local email account_name
+
+  read -p "Enter the email address for the new account: " email
+  read -p "Enter the name for the new account: " account_name
+
+  echo "Creating a new AWS account: $account_name with email $email..."
+  create_account_response=$(aws organizations create-account --email "$email" --account-name "$account_name" 2> /dev/null)
+
+  if [ $? -ne 0 ]; then
+    handle_error 1 "Failed to create the AWS account. Please check your input and permissions."
+  fi
+
+  request_id=$(echo "$create_account_response" | jq -r '.CreateAccountStatus.Id')
+  echo "Account creation in progress. Request ID: $request_id"
+
+  # Poll the status of the account creation
+  while true; do
+    status=$(aws organizations describe-create-account-status --create-account-request-id "$request_id" | jq -r '.CreateAccountStatus.State')
+    echo "Current status: $status"
+
+    if [[ "$status" == "SUCCEEDED" ]]; then
+      account_id=$(aws organizations describe-create-account-status --create-account-request-id "$request_id" | jq -r '.CreateAccountStatus.AccountId')
+      echo "Account successfully created! Account ID: $account_id"
+      break
+    elif [[ "$status" == "FAILED" ]]; then
+      handle_error 1 "Account creation failed. Check the AWS Management Console for more details."
+    else
+      echo "Waiting for account creation to complete..."
+      sleep 10
+    fi
+  done
+
+  echo "$account_id"
+}
+
+# Function to move an account to the organization root (if necessary)
+move_account() {
+  local account_id="$1"
+  local org_root_id source_parent_id
+
+  echo "Fetching organization root ID..."
+  org_root_id=$(aws organizations list-roots --query "Roots[0].Id" --output text 2> /dev/null)
+  if [ $? -ne 0 ]; then
+    handle_error 1 "Failed to fetch organization root ID. Please check your permissions."
+  fi
+  echo "Organization Root ID: $org_root_id"
+
+  echo "Fetching source parent ID for account $account_id..."
+  source_parent_id=$(aws organizations list-parents --child-id "$account_id" --query "Parents[0].Id" --output text 2> /dev/null)
+  if [ $? -ne 0 ]; then
+    handle_error 1 "Failed to fetch source parent ID. Please check your permissions."
+  fi
+  echo "Source Parent ID: $source_parent_id"
+
+  if [[ "$org_root_id" == "$source_parent_id" ]]; then
+    echo "Account $account_id is already under the organization root."
+    return
+  fi
+
+  echo "Moving account $account_id to the organization root..."
+  aws organizations move-account --account-id "$account_id" --source-parent-id "$source_parent_id" --destination-parent-id "$org_root_id"
+  if [ $? -ne 0 ]; then
+    handle_error 1 "Failed to move the account. Please check your permissions and input."
+  fi
+
+  echo "Account $account_id successfully moved to the organization root."
+}
+
+# Main script logic
+main() {
+  echo "Validating AWS CLI and credentials..."
+  validate_aws
+
+  echo "Creating a new AWS account..."
+  account_id=$(create_account)
+
+  echo "Waiting briefly to ensure account details propagate..."
+  sleep 15  # Allow time for AWS to finalize account creation
+
+  echo "Verifying account membership in the organization..."
+  if check_account_membership "$account_id"; then
+    echo "No further actions are necessary."
+  else
+    echo "Account is not yet part of the organization. Attempting to move it..."
+    move_account "$account_id"
+  fi
+}
+
+# Execute the main function
+main "$@"
+

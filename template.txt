@@ -3,11 +3,9 @@
 # ------------------------------------------------------------------------------
 # Script Name:    example_script.sh
 # Description:    This script demonstrates adding comments and how it works.
-# Usage:          ./example_script.sh [options]
+# Usage:          example_script.sh [options]
 # Options:        -h | --help    Show this help message
 #                 -v | --version Show script version
-#                 -a | --optionA Description of option A
-#                 -b | --optionB Description of option B
 # Author:         Your Name
 # Date:           2025-02-28
 # Version:        1.0
@@ -19,8 +17,6 @@ show_help() {
   echo "Options:"
   echo "  -h | --help    Show this help message"
   echo "  -v | --version Show script version"
-  echo "  -a | --optionA Description of option A"
-  echo "  -b | --optionB Description of option B"
 }
 
 # Display script version
@@ -28,12 +24,24 @@ show_version() {
   echo "example_script.sh version 1.0"
 }
 
+# Default function when no arguments are provided
+default_function() {
+  echo "No options were provided. Running the default function..."
+  echo "Use -h or --help for usage information."
+  # Add more actions here as needed
+}
+
+# Function to execute for the new option
+new_function() {
+  echo "Executing new function!"
+}
+
 # Main script logic
 main() {
   # Check if no arguments were provided
   if [ $# -eq 0 ]; then
-    echo "No options were provided. Use -h or --help for usage information."
-    exit 1
+    default_function
+    exit 0
   fi
 
   # Parse command-line options
@@ -47,15 +55,9 @@ main() {
         show_version
         exit 0
         ;;
-      -a|--optionA)
-        OPTION_A="$2"
-        echo "Option A selected with value: $OPTION_A"
-        shift 2
-        ;;
-      -b|--optionB)
-        OPTION_B="$2"
-        echo "Option B selected with value: $OPTION_B"
-        shift 2
+      -n|--new)
+        new_function
+        exit 0
         ;;
       *)
         echo "Unknown option: $1"
@@ -63,21 +65,9 @@ main() {
         exit 1
         ;;
     esac
+    shift
   done
-
-  # Insert your code below.
-  #
-
-  ## begin of code
-
-new_function()
-## some code here
-}
-
-  ## end of code 
-
 }
 
 # Execute the main function
 main "$@"
-

@@ -1,0 +1,86 @@
+#!/bin/bash
+
+# ------------------------------------------------------------------------------
+# Script Name:    device
+# Description:    Script to dynamically list, mount, and unmount devices, including WSL-mounted drives.
+# Usage:          mount_umount_device.sh
+# Author:         Julio Cesar Garcia
+# Date:           <Today's Date>
+# Version:        1.4
+# ------------------------------------------------------------------------------
+
+# Function to display available devices, including WSL-mounted drives
+list_devices() {
+  echo -e "\nAvailable devices:"
+  # Use `df -h` to display all mounted drives, ensuring it captures /mnt drives
+  df -h | grep '/mnt/' | awk '{printf "Filesystem: %-20s Size: %-10s Mounted on: %s\n", $1, $2, $6}'
+  echo
+}
+
+# Function to mount a device
+mount_device() {
+  read -rp "Enter the device name to mount (e.g., D: or E:): " device_name
+  read -rp "Enter the desired mount point (e.g., /mnt/custom): " mount_point
+
+  # Create the mount point if it doesn't exist
+  if [[ ! -d "$mount_point" ]]; then
+    sudo mkdir -p "$mount_point"
+    echo "Created mount point: $mount_point"
+  fi
+
+  # Mount the device
+  sudo mount -t drvfs "$device_name" "$mount_point"
+  if [[ $? -eq 0 ]]; then
+    echo "Device $device_name successfully mounted at $mount_point."
+  else
+    echo "ERROR: Failed to mount $device_name."
+  fi
+}
+
+# Function to unmount a device
+unmount_device() {
+  read -rp "Enter the mount point to unmount (e.g., /mnt/custom): " mount_point
+
+  # Unmount the device
+  sudo umount "$mount_point"
+  if [[ $? -eq 0 ]]; then
+    echo "Device successfully unmounted from $mount_point."
+  else
+    echo "ERROR: Failed to unmount $mount_point."
+  fi
+}
+
+# Main function to display the menu and handle user input
+main() {
+  while true; do
+    echo -e "\nChoose an option:"
+    echo "1) List devices"
+    echo "2) Mount a device"
+    echo "3) Unmount a device"
+    echo "4) Exit"
+
+    read -rp "Enter your choice (1-4): " choice
+
+    case "$choice" in
+      1) 
+        list_devices 
+        ;;
+      2) 
+        mount_device 
+        ;;
+      3) 
+        unmount_device 
+        ;;
+      4) 
+        echo "Exiting the script. Goodbye!"
+        break  # Break the loop to exit the script
+        ;;
+      *) 
+        echo "ERROR: Invalid choice. Please try again." 
+        ;;
+    esac
+  done
+}
+
+# Execute the main function
+main
